@@ -3,6 +3,8 @@ from typing import Dict, Optional
 
 
 class ScopedConfig(BaseModel):
+    db_path: str = "sunsetbot.db"
+
     schedule_trigger: str = "cron"
     schedule_kwargs: Dict = {"hour": "14,21"}
     schedule_message: str = "每日14:00和21:00"

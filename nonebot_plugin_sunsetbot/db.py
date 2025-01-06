@@ -1,6 +1,5 @@
 import aiosqlite
 from pydantic import BaseModel
-import nonebot_plugin_localstore as store
 
 from typing import List, Optional
 
@@ -11,10 +10,8 @@ class ScheduleData(BaseModel):
     user_id: str
     group_id: Optional[str]
 
-db_path = store.get_plugin_data_file("sunsetbot.db")
 
-
-class Database:
+class ScheduleDb:
     def __init__(self, path):
         self.db = aiosqlite.connect(path)
 
@@ -52,5 +49,3 @@ class Database:
 
     async def close(self):
         await self.db.close()
-
-db = Database(db_path)

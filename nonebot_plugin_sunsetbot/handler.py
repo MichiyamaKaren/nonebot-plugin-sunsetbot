@@ -6,9 +6,10 @@ from nonebot.adapters.onebot.v11 import MessageEvent as MessageEventOnebotv11, G
 from nonebot.params import CommandArg
 
 from nonebot_plugin_apscheduler import scheduler
+import nonebot_plugin_localstore as store
 
 from .sunsetbot import SunsetBot, ForecastResult
-from .db import db
+from .db import ScheduleDb
 from .config import Config
 
 from typing import List, Union
@@ -18,6 +19,9 @@ MessageEvent = Union[MessageEventConsole, MessageEventOnebotv11]
 
 sunset_api = SunsetBot()
 config = get_plugin_config(Config).sunsetbot
+
+db_path = store.get_plugin_data_file(config.db_path)
+db = ScheduleDb(db_path)
 
 
 def forecast_result_output(city: str, result: Union[ForecastResult, List[ForecastResult]], time_format: str = '%Y-%m-%d %H:%M:%S') -> str:
@@ -75,7 +79,7 @@ class Context:
 
 async def add_schduler_handler(matcher: Matcher, event: MessageEvent, args: Message = CommandArg()):
     context = Context.from_event(event)
-    city = args.extract_plain_text()
+    city = args.extract_plain_text().strip()
     schedule_exist = await db.fetch("SELECT id FROM schedule WHERE city=(?) AND user_id=(?) AND group_id=(?)",
                                     (city, context.user_id, context.group_id))
     if schedule_exist:
@@ -84,34 +88,37 @@ async def add_schduler_handler(matcher: Matcher, event: MessageEvent, args: Mess
     job_id = await db.insert_schedule(city, context.user_id, context.group_id)
     scheduler.add_job(sunset_query_schedule_job, id=str(job_id), args=(city, context.user_id, context.group_id),
                       trigger=config.schedule_trigger, **config.schedule_kwargs)
+    logger.info(f"add job ID {job_id}: user_id={context.user_id}, group_id={context.group_id}, city={city}")
     await matcher.finish(f"已订阅{city}的火烧云预报，{config.schedule_message}更新")
 
 
 async def list_user_schedule(matcher: Matcher, event: MessageEvent):
     context = Context.from_event(event)
-    schedules = await db.fetch("SELECT id,city FROM schedule WHERE user_id=(?) AND group_id=(?)", (context.user_id, context.group_id))
+    schedules = await db.fetch("SELECT city FROM schedule WHERE user_id=(?) AND group_id=(?)", (context.user_id, context.group_id))
 
-    user = f"[CQ:at,qq={context.user_id}]" if context.group_id is not None else "你"
     if not schedules:
-        await matcher.finish(f"{user}无订阅")
-    
-    await matcher.finish(f"{user}的订阅：\n"+"\n".join(f"{s[0]}. {s[1]}" for s in schedules))
+        await matcher.finish(f"无订阅", at_sender=True)
+
+    user = "你" if context.group_id == "-1" else ""
+    await matcher.finish(f"{user}的订阅：\n"+"\n".join(f"{s[1]}" for s in schedules), at_sender=True)
 
 
 async def delete_user_schedule(matcher: Matcher, event: MessageEvent, args: Message = CommandArg()):
     context = Context.from_event(event)
-    delete_id = args.extract_plain_text()
-    delete_city = await db.fetch("SELECT city FROM schedule WHERE id=(?) AND user_id=(?) AND group_id=(?)",
-                                 (delete_id, context.user_id, context.group_id))
-    if not delete_city:
+    delete_city = args.extract_plain_text().strip()
+    delete_id = await db.fetch("SELECT id FROM schedule WHERE id=(?) AND user_id=(?) AND group_id=(?) AND city=(?)",
+                                 (context.user_id, context.group_id, delete_city))
+    if not delete_id:
         await matcher.finish(f"你的订阅中无ID：{delete_id}")
 
+    delete_id = delete_id[0]
     await db.delete_schedule(delete_id)
     scheduler.remove_job(delete_id)
-    await matcher.finish(f"已取消{delete_city[0][0]}的订阅")
+    logger.info(f"delete job ID {delete_id}: user_id={context.user_id}, group_id={context.group_id}, city={delete_city}")
+    await matcher.finish(f"已取消{delete_city}的订阅")
 
 
-async def sunset_query_schedule_job(city: str, user_id: str, group_id: str = None):
+async def sunset_query_schedule_job(city: str, user_id: str, group_id: str = "-1"):
     bot: Union[ConsoleBot, Onebotv11] = get_bot()
     
     if isinstance(bot, ConsoleBot):
@@ -121,10 +128,12 @@ async def sunset_query_schedule_job(city: str, user_id: str, group_id: str = Non
             f"fire schedule: user_id={user_id}, group_id={group_id}, city={city}"))
     else:
         results = await sunset_api.get_forecast_1day(city)
-        if group_id:
+        if group_id != "-1":
             msg = f"[CQ:at,qq={user_id}]的订阅：\n" + forecast_result_output(city, results)
+            logger.debug(f"schedule job: send group message to user {user_id} in group {group_id}")
             await bot.send_group_msg(group_id=group_id, message=msg)
         else:
+            logger.debug(f"schedule job: send private message to user {user_id}")
             await bot.send_private_msg(user_id=user_id, message=forecast_result_output(city, results))
 
 
