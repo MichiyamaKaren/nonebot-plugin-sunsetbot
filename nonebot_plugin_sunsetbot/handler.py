@@ -100,16 +100,16 @@ async def list_user_schedule(matcher: Matcher, event: MessageEvent):
         await matcher.finish(f"无订阅", at_sender=True)
 
     user = "你" if context.group_id == "-1" else ""
-    await matcher.finish(f"{user}的订阅：\n"+"\n".join(f"{s[1]}" for s in schedules), at_sender=True)
+    await matcher.finish(f"{user}的订阅：\n"+"\n".join(f"{s[0]}" for s in schedules), at_sender=True)
 
 
 async def delete_user_schedule(matcher: Matcher, event: MessageEvent, args: Message = CommandArg()):
     context = Context.from_event(event)
     delete_city = args.extract_plain_text().strip()
-    delete_id = await db.fetch("SELECT id FROM schedule WHERE id=(?) AND user_id=(?) AND group_id=(?) AND city=(?)",
-                                 (context.user_id, context.group_id, delete_city))
+    delete_id = await db.fetch("SELECT id FROM schedule WHERE user_id=(?) AND group_id=(?) AND city=(?)",
+                               (context.user_id, context.group_id, delete_city))
     if not delete_id:
-        await matcher.finish(f"你的订阅中无ID：{delete_id}")
+        await matcher.finish(f"你的订阅中没有：{delete_city}")
 
     delete_id = delete_id[0]
     await db.delete_schedule(delete_id)
