@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nonebot-plugin-sunsetbot"
-version = "0.1.2"
+version = "0.1.3"
 description = "SunsetBot朝霞晚霞查询"
 authors = ["MichiyamaKaren <mustarfar@163.com>"]
 readme = "README.md"

@@ -111,9 +111,9 @@ async def delete_user_schedule(matcher: Matcher, event: MessageEvent, args: Mess
     if not delete_id:
         await matcher.finish(f"你的订阅中没有：{delete_city}")
 
-    delete_id = delete_id[0]
+    delete_id = delete_id[0][0]
     await db.delete_schedule(delete_id)
-    scheduler.remove_job(delete_id)
+    scheduler.remove_job(str(delete_id))
     logger.info(f"delete job ID {delete_id}: user_id={context.user_id}, group_id={context.group_id}, city={delete_city}")
     await matcher.finish(f"已取消{delete_city}的订阅")
 
