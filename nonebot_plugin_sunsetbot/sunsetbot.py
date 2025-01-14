@@ -9,8 +9,10 @@ from typing import Dict, List, Union
 
 
 class ForecastResult(BaseModel):
-    aod: str
-    quality: str
+    aod: float
+    aod_str: str
+    quality: float
+    quality_str: str
     event_time: datetime
 
 
@@ -54,9 +56,11 @@ class SunsetBot:
         result_raw = await self.get_json(url, params={
             'query_id': self.query_id(), 'intend': 'select_city', 'query_city': city, 'event': event, 'event_date': 'None', 'times': 'None'})
         if result_raw['status'] == 'ok':
+            aod, aod_description = result_raw['tb_aod'].strip().split('<br>')
+            quality, quality_description = result_raw['tb_quality'].strip().split('<br>')
             result = ForecastResult(
-                aod=result_raw['tb_aod'].replace('<br>', '').strip(),
-                quality = result_raw['tb_quality'].replace('<br>', '').strip(),
+                aod=float(aod), quality=float(quality),
+                aod_str=aod+aod_description, quality_str=quality+quality_description,
                 event_time = datetime.strptime(
                     result_raw['tb_event_time'], '%Y-%m-%d<br>%H:%M:%S'))
             return result
